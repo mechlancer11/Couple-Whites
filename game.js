@@ -12,8 +12,8 @@ const LS_KEY         = 'mcdb_best'; // localStorage key for high score
 
 // ─── Supabase config (global leaderboard) ─────────────────────────────────────
 // Fill these in from Project Settings → API in your Supabase dashboard
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';       // e.g. https://xxxx.supabase.co
-const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';  // anon/public key
+const SUPABASE_URL = 'https://whawxbgbujntxllkgljr.supabase.co';
+const SUPABASE_KEY = 'sb_publishable__Jgr0SulyiV7rNYcArVdYQ_MBA6-IHW';
 const LB_TABLE     = 'leaderboard';
 const LB_MAX       = 10;
 
