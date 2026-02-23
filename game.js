@@ -9,8 +9,13 @@ const GAP_HEIGHT     = 265;
 const GAP_MARGIN     = 110;
 const SPAWN_INTERVAL = 2100;
 const LS_KEY         = 'mcdb_best'; // localStorage key for high score
-const LB_KEY         = 'cwLeaderboard'; // localStorage key for leaderboard entries
-const LB_MAX         = 10; // max leaderboard entries stored
+
+// ─── Supabase config (global leaderboard) ─────────────────────────────────────
+// Fill these in from Project Settings → API in your Supabase dashboard
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';       // e.g. https://xxxx.supabase.co
+const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';  // anon/public key
+const LB_TABLE     = 'leaderboard';
+const LB_MAX       = 10;
 
 // ─── Asset Paths ──────────────────────────────────────────────────────────────
 
@@ -813,21 +818,34 @@ class GameScene extends Phaser.Scene {
     });
   }
 
-  // ── Leaderboard helpers ────────────────────────────────────────────────────
+  // ── Leaderboard helpers (Supabase global leaderboard) ─────────────────────
 
-  _getLBData() {
-    try { return JSON.parse(localStorage.getItem(LB_KEY) || '[]'); }
-    catch { return []; }
+  async _getLBData() {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/${LB_TABLE}?select=*&order=score.desc&limit=${LB_MAX}`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (!res.ok) throw new Error(`LB fetch failed: ${res.status}`);
+    return res.json();
   }
 
-  _saveLBEntry(initials, score, message, msgColor) {
-    const data = this._getLBData();
-    const ts   = Date.now();
-    data.push({ initials, score, message, msgColor, ts });
-    data.sort((a, b) => b.score - a.score);
-    if (data.length > LB_MAX) data.length = LB_MAX;
-    localStorage.setItem(LB_KEY, JSON.stringify(data));
-    return data.findIndex(e => e.ts === ts);
+  async _saveLBEntry(initials, score, message, msgColor) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/${LB_TABLE}`,
+      {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
+        body: JSON.stringify({ initials, score, message, msg_color: msgColor }),
+      }
+    );
+    if (!res.ok) throw new Error(`LB save failed: ${res.status}`);
+    const rows = await res.json();
+    return rows[0]?.id ?? null; // return the inserted row's id
   }
 
   _clearGoElements() {
@@ -962,9 +980,18 @@ class GameScene extends Phaser.Scene {
     const doSubmit = () => {
       if (!letters.every(l => l !== '_')) return;
       const initials = letters.join('');
-      const idx = this._saveLBEntry(initials, this.score, deathMsg, msgColor);
-      this._clearGoElements();
-      this._showLeaderboard(idx);
+      submitTxt.setText('SAVING...');
+      submitTxt.setStyle({ fill: '#AAAAAA' });
+      submitBg.clear();
+      this._saveLBEntry(initials, this.score, deathMsg, msgColor)
+        .then(savedId => {
+          this._clearGoElements();
+          this._showLeaderboard(savedId);
+        })
+        .catch(() => {
+          submitTxt.setText('ERROR — RETRY');
+          submitTxt.setStyle({ fill: '#FF4444' });
+        });
     };
 
     this._lbKeyHandler = (evt) => {
@@ -998,16 +1025,16 @@ class GameScene extends Phaser.Scene {
 
   // ── Leaderboard display screen ─────────────────────────────────────────────
 
-  _showLeaderboard(highlightIdx) {
+  _showLeaderboard(savedId) {
     this._clearGoElements();
     const els  = this._goElements;
     const glow = c => ({ offsetX:0, offsetY:0, color:c, blur:10, fill:true });
     const cx   = GAME_WIDTH / 2;
-    const data = this._getLBData();
 
+    // Fixed-size panel (same regardless of row count)
     const ROW_H  = 58;
     const panelW = 420;
-    const panelH = Math.min(760, 76 + data.length * ROW_H + 62);
+    const panelH = Math.min(760, 76 + LB_MAX * ROW_H + 62);
     const panelX = (GAME_WIDTH - panelW) / 2;
     const panelY = Math.max(18, GAME_HEIGHT / 2 - panelH / 2);
 
@@ -1023,53 +1050,13 @@ class GameScene extends Phaser.Scene {
       stroke:'#001133', strokeThickness:4, shadow:glow('#00FFFF'),
     }).setOrigin(0.5, 0).setDepth(20));
 
-    if (data.length === 0) {
-      els.push(this.add.text(cx, panelY + 100, 'NO SCORES YET', {
-        fontSize:'20px', fill:'#555555', fontFamily:'monospace',
-      }).setOrigin(0.5, 0).setDepth(20));
-    }
+    // Loading indicator — replaced once data arrives
+    const loadingTxt = this.add.text(cx, panelY + 120, 'LOADING...', {
+      fontSize:'22px', fill:'#555555', fontFamily:'monospace',
+    }).setOrigin(0.5, 0).setDepth(20);
+    els.push(loadingTxt);
 
-    data.forEach((entry, i) => {
-      const isHL   = i === highlightIdx;
-      const rowY   = panelY + 76 + i * ROW_H;
-
-      if (isHL) {
-        const hl = this.add.graphics().setDepth(19);
-        hl.fillStyle(0x00FFFF, 0.08);
-        hl.fillRoundedRect(panelX + 8, rowY - 4, panelW - 16, ROW_H - 2, 8);
-        els.push(hl);
-      }
-
-      const rankColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
-      const rankColor  = rankColors[i] || '#888888';
-      const rankLabels = ['1ST', '2ND', '3RD'];
-      const rankLabel  = rankLabels[i] || `${i + 1}`;
-
-      // Rank
-      els.push(this.add.text(panelX + 14, rowY + 8, rankLabel, {
-        fontSize:'15px', fill:rankColor, fontFamily:'monospace',
-      }).setOrigin(0, 0).setDepth(20));
-
-      // Initials
-      els.push(this.add.text(panelX + 58, rowY + 4, entry.initials, {
-        fontSize:'32px', fill: isHL ? '#00FFFF' : '#FFFFFF', fontFamily:'monospace',
-        shadow: isHL ? glow('#00FFFF') : undefined,
-      }).setOrigin(0, 0).setDepth(20));
-
-      // Score
-      els.push(this.add.text(panelX + 162, rowY + 4, String(entry.score).padStart(5), {
-        fontSize:'30px', fill: i === 0 ? '#FFD700' : '#00FF88', fontFamily:'monospace',
-      }).setOrigin(0, 0).setDepth(20));
-
-      // Death message (second line, right-aligned)
-      const msgDisplay = entry.message.length > 28 ? entry.message.slice(0, 26) + '..' : entry.message;
-      els.push(this.add.text(panelX + panelW - 14, rowY + 36, msgDisplay, {
-        fontSize:'11px', fill: entry.msgColor || '#666666', fontFamily:'monospace',
-        align:'right',
-      }).setOrigin(1, 0).setDepth(20));
-    });
-
-    // PLAY AGAIN button
+    // PLAY AGAIN button always visible at bottom
     const btnY   = panelY + panelH - 48;
     const playBtn = this.add.text(cx, btnY, 'PLAY AGAIN', {
       fontSize:'28px', fill:'#FF00FF', fontFamily:'monospace',
@@ -1078,8 +1065,67 @@ class GameScene extends Phaser.Scene {
     playBtn.on('pointerdown', () => { this._clearGoElements(); this.scene.restart(); });
     this.tweens.add({ targets:playBtn, alpha:{ from:1, to:0.45 }, duration:600, yoyo:true, repeat:-1 });
     els.push(playBtn);
-
     this.input.keyboard.once('keydown-SPACE', () => { this._clearGoElements(); this.scene.restart(); });
+
+    // Fetch and render rows
+    this._getLBData()
+      .then(data => {
+        if (!loadingTxt.active) return; // panel was closed
+        loadingTxt.destroy();
+
+        if (data.length === 0) {
+          const noData = this.add.text(cx, panelY + 120, 'NO SCORES YET', {
+            fontSize:'20px', fill:'#555555', fontFamily:'monospace',
+          }).setOrigin(0.5, 0).setDepth(20);
+          els.push(noData);
+          return;
+        }
+
+        const highlightIdx = savedId != null ? data.findIndex(e => e.id === savedId) : -1;
+
+        data.forEach((entry, i) => {
+          const isHL = i === highlightIdx;
+          const rowY = panelY + 76 + i * ROW_H;
+
+          if (isHL) {
+            const hl = this.add.graphics().setDepth(19);
+            hl.fillStyle(0x00FFFF, 0.08);
+            hl.fillRoundedRect(panelX + 8, rowY - 4, panelW - 16, ROW_H - 2, 8);
+            els.push(hl);
+          }
+
+          const rankColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
+          const rankColor  = rankColors[i] || '#888888';
+          const rankLabels = ['1ST', '2ND', '3RD'];
+          const rankLabel  = rankLabels[i] || `${i + 1}`;
+
+          els.push(this.add.text(panelX + 14, rowY + 8, rankLabel, {
+            fontSize:'15px', fill:rankColor, fontFamily:'monospace',
+          }).setOrigin(0, 0).setDepth(20));
+
+          els.push(this.add.text(panelX + 58, rowY + 4, entry.initials, {
+            fontSize:'32px', fill: isHL ? '#00FFFF' : '#FFFFFF', fontFamily:'monospace',
+            shadow: isHL ? glow('#00FFFF') : undefined,
+          }).setOrigin(0, 0).setDepth(20));
+
+          els.push(this.add.text(panelX + 162, rowY + 4, String(entry.score).padStart(5), {
+            fontSize:'30px', fill: i === 0 ? '#FFD700' : '#00FF88', fontFamily:'monospace',
+          }).setOrigin(0, 0).setDepth(20));
+
+          const msgDisplay = (entry.message || '').length > 28
+            ? (entry.message || '').slice(0, 26) + '..'
+            : (entry.message || '');
+          els.push(this.add.text(panelX + panelW - 14, rowY + 36, msgDisplay, {
+            fontSize:'11px', fill: entry.msg_color || '#666666', fontFamily:'monospace',
+            align:'right',
+          }).setOrigin(1, 0).setDepth(20));
+        });
+      })
+      .catch(() => {
+        if (!loadingTxt.active) return;
+        loadingTxt.setText('FAILED TO LOAD\nCHECK CONNECTION');
+        loadingTxt.setStyle({ fill: '#FF4444', align: 'center' });
+      });
   }
 
   // ── Claude Cape power-up ───────────────────────────────────────────────────
