@@ -1,0 +1,4 @@
+.DS_Store
+npm-global/
+*.ase
+node_modules/
