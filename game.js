@@ -144,6 +144,7 @@ class GameScene extends Phaser.Scene {
     this.immuneUntil       = 0;
     this._goElements       = []; // game-over / leaderboard panel elements
     this._lbKeyHandler     = null; // keyboard handler for initials entry
+    this._lbCursorTimer    = null; // blinking cursor timer for solana entry
 
     this._buildBackground();
     this._buildPlayer();
@@ -852,9 +853,10 @@ class GameScene extends Phaser.Scene {
     return res.json();
   }
 
-  async _saveLBEntry(initials, score, message, msgColor) {
+  async _saveLBEntry(initials, score, message, msgColor, solanaAddr = null) {
+    const payload = { initials, score, message, msg_color: msgColor, solana_address: solanaAddr };
     if (!this._supabaseReady()) {
-      const id = this._localSave({ initials, score, message, msg_color: msgColor });
+      const id = this._localSave(payload);
       return id;
     }
     const res = await fetch(
@@ -867,7 +869,7 @@ class GameScene extends Phaser.Scene {
           'Content-Type': 'application/json',
           'Prefer': 'return=representation',
         },
-        body: JSON.stringify({ initials, score, message, msg_color: msgColor }),
+        body: JSON.stringify(payload),
       }
     );
     if (!res.ok) throw new Error(`LB save failed: ${res.status}`);
@@ -881,6 +883,10 @@ class GameScene extends Phaser.Scene {
     if (this._lbKeyHandler) {
       this.input.keyboard.off('keydown', this._lbKeyHandler);
       this._lbKeyHandler = null;
+    }
+    if (this._lbCursorTimer) {
+      this._lbCursorTimer.remove(false);
+      this._lbCursorTimer = null;
     }
     this.input.keyboard.removeAllListeners('keydown-SPACE');
   }
@@ -1007,18 +1013,8 @@ class GameScene extends Phaser.Scene {
     const doSubmit = () => {
       if (!letters.every(l => l !== '_')) return;
       const initials = letters.join('');
-      submitTxt.setText('SAVING...');
-      submitTxt.setStyle({ fill: '#AAAAAA' });
-      submitBg.clear();
-      this._saveLBEntry(initials, this.score, deathMsg, msgColor)
-        .then(savedId => {
-          this._clearGoElements();
-          this._showLeaderboard(savedId);
-        })
-        .catch(() => {
-          submitTxt.setText('ERROR — RETRY');
-          submitTxt.setStyle({ fill: '#FF4444' });
-        });
+      this._clearGoElements();
+      this._showSolanaEntry(initials, deathMsg, msgColor);
     };
 
     this._lbKeyHandler = (evt) => {
@@ -1050,6 +1046,140 @@ class GameScene extends Phaser.Scene {
     refresh();
   }
 
+  // ── Solana address entry screen ───────────────────────────────────────────
+
+  _showSolanaEntry(initials, deathMsg, msgColor) {
+    this._clearGoElements();
+    const els  = this._goElements;
+    const glow = c => ({ offsetX:0, offsetY:0, color:c, blur:12, fill:true });
+    const cx   = GAME_WIDTH / 2;
+    const SOL  = 0x9945FF; // Solana purple
+    const panelW = 420, panelH = 340;
+    const panelX = (GAME_WIDTH - panelW) / 2;
+    const panelY = GAME_HEIGHT / 2 - panelH / 2;
+
+    const g = this.add.graphics().setDepth(18);
+    g.fillStyle(0x000000, 0.92);
+    g.fillRoundedRect(panelX, panelY, panelW, panelH, 20);
+    g.lineStyle(2, SOL, 0.9);
+    g.strokeRoundedRect(panelX, panelY, panelW, panelH, 20);
+    els.push(g);
+
+    els.push(this.add.text(cx, panelY + 22, 'SOLANA ADDRESS', {
+      fontSize:'30px', fill:'#9945FF', fontFamily:'monospace',
+      stroke:'#110022', strokeThickness:4, shadow:glow('#9945FF'),
+    }).setOrigin(0.5, 0).setDepth(20));
+
+    els.push(this.add.text(cx, panelY + 64, 'OPTIONAL  —  SKIP TO JUST POST SCORE', {
+      fontSize:'12px', fill:'#666666', fontFamily:'monospace',
+    }).setOrigin(0.5, 0).setDepth(20));
+
+    // Address text box
+    let address = '';
+    let showCursor = true;
+    const boxY = panelY + 100;
+    const boxH = 80;
+    const addrBg = this.add.graphics().setDepth(19);
+    const addrTxt = this.add.text(cx, boxY + 12, '', {
+      fontSize:'13px', fill:'#FFFFFF', fontFamily:'monospace',
+      align:'center', wordWrap:{ width: panelW - 48 },
+    }).setOrigin(0.5, 0).setDepth(20);
+    const validTxt = this.add.text(cx, boxY + boxH - 18, '', {
+      fontSize:'11px', fill:'#00FF88', fontFamily:'monospace',
+    }).setOrigin(0.5, 0).setDepth(20);
+    els.push(addrBg, addrTxt, validTxt);
+
+    // Submit / Skip buttons
+    const submitY = panelY + panelH - 116;
+    const skipY   = panelY + panelH - 58;
+    const submitBg  = this.add.graphics().setDepth(19);
+    const submitTxt = this.add.text(cx, submitY + 14, 'SUBMIT ADDRESS', {
+      fontSize:'22px', fill:'#444444', fontFamily:'monospace',
+    }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
+    const skipTxt = this.add.text(cx, skipY + 12, 'SKIP — JUST POST SCORE', {
+      fontSize:'16px', fill:'#888888', fontFamily:'monospace',
+    }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
+    els.push(submitBg, submitTxt, skipTxt);
+
+    const isValid = () => address.length >= 32 && address.length <= 44;
+
+    const redraw = () => {
+      // Box
+      addrBg.clear();
+      addrBg.fillStyle(0x111111, 0.7);
+      addrBg.fillRoundedRect(panelX + 16, boxY, panelW - 32, boxH, 8);
+      addrBg.lineStyle(2, isValid() ? SOL : 0x333333, 1);
+      addrBg.strokeRoundedRect(panelX + 16, boxY, panelW - 32, boxH, 8);
+
+      // Address text with blinking cursor
+      const display = address + (showCursor ? '|' : ' ');
+      addrTxt.setText(display.length > 1 ? display : (showCursor ? '|' : ' '));
+
+      // Validity hint
+      if (address.length === 0) {
+        validTxt.setText('paste or type your wallet address');
+        validTxt.setStyle({ fill: '#555555' });
+      } else if (address.length < 32) {
+        validTxt.setText(`${address.length}/44 — too short`);
+        validTxt.setStyle({ fill: '#FF6644' });
+      } else {
+        validTxt.setText(`${address.length} chars  ✓  valid length`);
+        validTxt.setStyle({ fill: '#00FF88' });
+      }
+
+      // Submit button style
+      submitBg.clear();
+      if (isValid()) {
+        submitBg.fillStyle(SOL, 0.15);
+        submitBg.fillRoundedRect(cx - 120, submitY - 4, 240, 46, 10);
+        submitBg.lineStyle(2, SOL, 0.9);
+        submitBg.strokeRoundedRect(cx - 120, submitY - 4, 240, 46, 10);
+        submitTxt.setStyle({ fill: '#9945FF' });
+      } else {
+        submitBg.fillStyle(0x222222, 0.5);
+        submitBg.fillRoundedRect(cx - 120, submitY - 4, 240, 46, 10);
+        submitBg.lineStyle(2, 0x333333, 0.5);
+        submitBg.strokeRoundedRect(cx - 120, submitY - 4, 240, 46, 10);
+        submitTxt.setStyle({ fill: '#444444' });
+      }
+    };
+
+    this._lbCursorTimer = this.time.addEvent({
+      delay: 500, loop: true,
+      callback: () => { showCursor = !showCursor; redraw(); },
+    });
+
+    const doSave = (addr) => {
+      submitTxt.setText('SAVING...');
+      submitTxt.setStyle({ fill: '#AAAAAA' });
+      submitBg.clear();
+      this._saveLBEntry(initials, this.score, deathMsg, msgColor, addr || null)
+        .then(savedId => { this._clearGoElements(); this._showLeaderboard(savedId); })
+        .catch(() => { submitTxt.setText('ERROR — RETRY'); submitTxt.setStyle({ fill: '#FF4444' }); });
+    };
+
+    submitTxt.on('pointerdown', () => { if (isValid()) doSave(address); });
+    skipTxt.on('pointerdown',   () => doSave(null));
+
+    this._lbKeyHandler = (evt) => {
+      if (evt.key === 'Backspace') {
+        address = address.slice(0, -1);
+        redraw();
+      } else if (evt.key === 'Enter') {
+        if (isValid()) doSave(address);
+        else if (address.length === 0) doSave(null); // empty = skip
+      } else if (evt.key === 'Escape') {
+        doSave(null);
+      } else if (evt.key.length === 1 && address.length < 44) {
+        address += evt.key;
+        redraw();
+      }
+    };
+    this.input.keyboard.on('keydown', this._lbKeyHandler);
+
+    redraw();
+  }
+
   // ── Leaderboard display screen ─────────────────────────────────────────────
 
   _showLeaderboard(savedId) {
@@ -1059,7 +1189,8 @@ class GameScene extends Phaser.Scene {
     const cx   = GAME_WIDTH / 2;
 
     // Fixed-size panel (same regardless of row count)
-    const ROW_H  = 58;
+    // ROW_H = 68 to fit death message + optional solana address
+    const ROW_H  = 68;
     const panelW = 420;
     const panelH = Math.min(760, 76 + LB_MAX * ROW_H + 62);
     const panelX = (GAME_WIDTH - panelW) / 2;
@@ -1146,6 +1277,17 @@ class GameScene extends Phaser.Scene {
             fontSize:'11px', fill: entry.msg_color || '#666666', fontFamily:'monospace',
             align:'right',
           }).setOrigin(1, 0).setDepth(20));
+
+          // Solana address (truncated: first6...last6)
+          if (entry.solana_address) {
+            const addr = entry.solana_address;
+            const short = addr.length > 12
+              ? addr.slice(0, 5) + '...' + addr.slice(-5)
+              : addr;
+            els.push(this.add.text(panelX + 14, rowY + 50, '◎ ' + short, {
+              fontSize:'11px', fill:'#9945FF', fontFamily:'monospace',
+            }).setOrigin(0, 0).setDepth(20));
+          }
         });
       })
       .catch(() => {
