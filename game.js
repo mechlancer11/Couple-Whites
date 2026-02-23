@@ -818,9 +818,32 @@ class GameScene extends Phaser.Scene {
     });
   }
 
-  // ── Leaderboard helpers (Supabase global leaderboard) ─────────────────────
+  // ── Leaderboard helpers ────────────────────────────────────────────────────
+  // Uses Supabase when credentials are configured, otherwise falls back to
+  // localStorage so the leaderboard still works locally.
+
+  _supabaseReady() {
+    return SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_KEY !== 'YOUR_SUPABASE_ANON_KEY';
+  }
+
+  // ── localStorage fallback helpers ──
+  _localGet() {
+    try { return JSON.parse(localStorage.getItem('cwLB') || '[]'); }
+    catch { return []; }
+  }
+  _localSave(entry) {
+    const data = this._localGet();
+    const ts   = Date.now();
+    entry.id   = ts;
+    data.push(entry);
+    data.sort((a, b) => b.score - a.score);
+    if (data.length > LB_MAX) data.length = LB_MAX;
+    localStorage.setItem('cwLB', JSON.stringify(data));
+    return ts;
+  }
 
   async _getLBData() {
+    if (!this._supabaseReady()) return this._localGet();
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/${LB_TABLE}?select=*&order=score.desc&limit=${LB_MAX}`,
       { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
@@ -830,6 +853,10 @@ class GameScene extends Phaser.Scene {
   }
 
   async _saveLBEntry(initials, score, message, msgColor) {
+    if (!this._supabaseReady()) {
+      const id = this._localSave({ initials, score, message, msg_color: msgColor });
+      return id;
+    }
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/${LB_TABLE}`,
       {
@@ -845,7 +872,7 @@ class GameScene extends Phaser.Scene {
     );
     if (!res.ok) throw new Error(`LB save failed: ${res.status}`);
     const rows = await res.json();
-    return rows[0]?.id ?? null; // return the inserted row's id
+    return rows[0]?.id ?? null;
   }
 
   _clearGoElements() {
