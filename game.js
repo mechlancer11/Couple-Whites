@@ -1526,16 +1526,16 @@ class GameScene extends Phaser.Scene {
   _spawnGrokPowerup(x) {
     const y = GAME_HEIGHT / 2 + Phaser.Math.Between(-80, 80);
     const g  = this.physics.add.image(x, y, 'grok-pickup');
-    g.setDisplaySize(56, 56).setTint(0xAA44FF);
+    g.setDisplaySize(56, 56).setTint(0xFFFFFF);
     g.body.allowGravity = false;
     g.setVelocityX(-this.currentSpeed).setDepth(4);
     this.tweens.add({ targets:g, angle:360, duration:1800, repeat:-1 });
     this.tweens.add({ targets:g, alpha:{from:0.7,to:1}, duration:350, yoyo:true, repeat:-1 });
     // Alert
     const alert = this.add.text(GAME_WIDTH/2, GAME_HEIGHT * 0.44, '🕳 GROK HOLE 🕳', {
-      fontSize:'22px', fill:'#AA44FF', fontFamily:'monospace',
+      fontSize:'22px', fill:'#FFFFFF', fontFamily:'monospace',
       stroke:'#110022', strokeThickness:3,
-      shadow:{offsetX:0,offsetY:0,color:'#AA44FF',blur:16,fill:true},
+      shadow:{offsetX:0,offsetY:0,color:'#FFFFFF',blur:16,fill:true},
     }).setOrigin(0.5).setDepth(20).setAlpha(0);
     this.tweens.add({ targets:alert, alpha:1, duration:300, yoyo:true, hold:800,
       onComplete:()=>alert.destroy() });
@@ -1572,7 +1572,7 @@ class GameScene extends Phaser.Scene {
     const cx = GAME_WIDTH / 2, cy = GAME_HEIGHT / 2;
 
     // Flash + teleport to groklands immediately (spiral happens inside groklands)
-    const flash = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0xAA44FF, 1).setDepth(40);
+    const flash = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0xFFFFFF, 1).setDepth(40);
     this.tweens.add({ targets:flash, alpha:0, duration:500, onComplete:()=>flash.destroy() });
 
     this.tweens.add({ targets:[this.bgWarpedBack, this.bgCustom, this.bgLevel2, this.bgLevel3], alpha:0, duration:350 });
@@ -1584,16 +1584,16 @@ class GameScene extends Phaser.Scene {
 
     // Spinning grok logo at center — the "hole" the player spirals into
     const logo = this.add.image(cx, cy, 'grok-pickup');
-    logo.setDisplaySize(120, 120).setTint(0xAA44FF).setBlendMode(Phaser.BlendModes.ADD).setDepth(28);
+    logo.setDisplaySize(120, 120).setTint(0xFFFFFF).setBlendMode(Phaser.BlendModes.ADD).setDepth(28);
     this.tweens.add({ targets:logo, angle:360, duration:1000, repeat:-1 });
     this.tweens.add({ targets:logo, scaleX:{from:0.8,to:1.2}, scaleY:{from:0.8,to:1.2},
       duration:500, yoyo:true, repeat:-1 });
 
     // Title
     const title = this.add.text(cx, 55, 'GROKLANDS', {
-      fontSize:'46px', fill:'#AA44FF', fontFamily:'monospace',
+      fontSize:'46px', fill:'#FFFFFF', fontFamily:'monospace',
       stroke:'#110022', strokeThickness:4,
-      shadow:{offsetX:0,offsetY:0,color:'#AA44FF',blur:22,fill:true},
+      shadow:{offsetX:0,offsetY:0,color:'#FFFFFF',blur:22,fill:true},
     }).setOrigin(0.5).setDepth(32);
 
     // These persist through explore and spiral-out; destroyed in _finalizeGrokExit
@@ -1609,7 +1609,7 @@ class GameScene extends Phaser.Scene {
     const cx = GAME_WIDTH / 2, cy = GAME_HEIGHT / 2;
 
     // Small flash to signal transition from spiral to free-fly
-    const flash = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0xAA44FF, 0.5).setDepth(38);
+    const flash = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0xFFFFFF, 0.5).setDepth(38);
     this.tweens.add({ targets:flash, alpha:0, duration:300, onComplete:()=>flash.destroy() });
 
     // Player emerges from center — re-enable gravity
@@ -1625,9 +1625,9 @@ class GameScene extends Phaser.Scene {
 
     this.grokCountdown = 6;
     const cdText = this.add.text(cx, GAME_HEIGHT - 70, '6', {
-      fontSize:'72px', fill:'#AA44FF', fontFamily:'monospace',
+      fontSize:'72px', fill:'#FFFFFF', fontFamily:'monospace',
       stroke:'#110022', strokeThickness:5,
-      shadow:{offsetX:0,offsetY:0,color:'#AA44FF',blur:30,fill:true},
+      shadow:{offsetX:0,offsetY:0,color:'#FFFFFF',blur:30,fill:true},
     }).setOrigin(0.5).setDepth(32);
     this._grokCountdownText = cdText;
 
@@ -1689,7 +1689,7 @@ class GameScene extends Phaser.Scene {
 
     // Flash + swap back to normal world
     const cx = GAME_WIDTH / 2, cy = GAME_HEIGHT / 2;
-    const flash = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0xAA44FF, 1).setDepth(40);
+    const flash = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0xFFFFFF, 1).setDepth(40);
     this.tweens.add({ targets:flash, alpha:0, duration:600, onComplete:()=>flash.destroy() });
 
     this.tweens.add({ targets:this.bgGrokWorld, alpha:0, duration:500 });
@@ -1738,8 +1738,8 @@ class GameScene extends Phaser.Scene {
     this.score += 20;
     this.scoreText.setText(this.score);
     const lbl = this.add.text(GAME_WIDTH/2, GAME_HEIGHT * 0.38, 'GROK BONUS  +20', {
-      fontSize:'28px', fill:'#AA44FF', fontFamily:'monospace',
-      shadow:{offsetX:0,offsetY:0,color:'#AA44FF',blur:12,fill:true},
+      fontSize:'28px', fill:'#FFFFFF', fontFamily:'monospace',
+      shadow:{offsetX:0,offsetY:0,color:'#FFFFFF',blur:12,fill:true},
     }).setOrigin(0.5).setDepth(20);
     this.tweens.add({ targets:lbl, alpha:0, y:lbl.y-60, duration:1300, delay:300,
       onComplete:()=>lbl.destroy() });
