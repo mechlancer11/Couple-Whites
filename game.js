@@ -145,6 +145,7 @@ class GameScene extends Phaser.Scene {
     this._goElements       = []; // game-over / leaderboard panel elements
     this._lbKeyHandler     = null; // keyboard handler for initials entry
     this._lbCursorTimer    = null; // blinking cursor timer for solana entry
+    this._lbPasteHandler   = null; // document paste handler for solana entry
 
     this._buildBackground();
     this._buildPlayer();
@@ -892,6 +893,10 @@ class GameScene extends Phaser.Scene {
       this._lbCursorTimer.remove(false);
       this._lbCursorTimer = null;
     }
+    if (this._lbPasteHandler) {
+      document.removeEventListener('paste', this._lbPasteHandler);
+      this._lbPasteHandler = null;
+    }
     this.input.keyboard.removeAllListeners('keydown-SPACE');
   }
 
@@ -1057,8 +1062,8 @@ class GameScene extends Phaser.Scene {
     const els  = this._goElements;
     const glow = c => ({ offsetX:0, offsetY:0, color:c, blur:12, fill:true });
     const cx   = GAME_WIDTH / 2;
-    const SOL  = 0x9945FF; // Solana purple
-    const panelW = 420, panelH = 340;
+    const SOL  = 0x9945FF;
+    const panelW = 420, panelH = 360;
     const panelX = (GAME_WIDTH - panelW) / 2;
     const panelY = GAME_HEIGHT / 2 - panelH / 2;
 
@@ -1074,64 +1079,74 @@ class GameScene extends Phaser.Scene {
       stroke:'#110022', strokeThickness:4, shadow:glow('#9945FF'),
     }).setOrigin(0.5, 0).setDepth(20));
 
-    els.push(this.add.text(cx, panelY + 64, 'OPTIONAL  —  SKIP TO JUST POST SCORE', {
+    els.push(this.add.text(cx, panelY + 62, 'OPTIONAL  —  SKIP TO JUST POST SCORE', {
       fontSize:'12px', fill:'#666666', fontFamily:'monospace',
+    }).setOrigin(0.5, 0).setDepth(20));
+
+    // Paste hint banner
+    els.push(this.add.text(cx, panelY + 86, 'CTRL+V  /  CMD+V  TO PASTE', {
+      fontSize:'13px', fill:'#9945FF', fontFamily:'monospace',
+      shadow:glow('#9945FF'),
     }).setOrigin(0.5, 0).setDepth(20));
 
     // Address text box
     let address = '';
     let showCursor = true;
-    const boxY = panelY + 100;
-    const boxH = 80;
-    const addrBg = this.add.graphics().setDepth(19);
-    const addrTxt = this.add.text(cx, boxY + 12, '', {
-      fontSize:'13px', fill:'#FFFFFF', fontFamily:'monospace',
+    const boxY = panelY + 116;
+    const boxH = 86;
+
+    const addrBg  = this.add.graphics().setDepth(19);
+    // Placeholder shown when empty
+    const placeholderTxt = this.add.text(cx, boxY + 16, 'PASTE YOUR WALLET ADDRESS HERE', {
+      fontSize:'13px', fill:'#333333', fontFamily:'monospace',
+      align:'center', wordWrap:{ width: panelW - 48 },
+    }).setOrigin(0.5, 0).setDepth(20);
+    // Actual address text
+    const addrTxt = this.add.text(cx, boxY + 10, '', {
+      fontSize:'12px', fill:'#FFFFFF', fontFamily:'monospace',
       align:'center', wordWrap:{ width: panelW - 48 },
     }).setOrigin(0.5, 0).setDepth(20);
     const validTxt = this.add.text(cx, boxY + boxH - 18, '', {
-      fontSize:'11px', fill:'#00FF88', fontFamily:'monospace',
+      fontSize:'11px', fill:'#555555', fontFamily:'monospace',
     }).setOrigin(0.5, 0).setDepth(20);
-    els.push(addrBg, addrTxt, validTxt);
+    els.push(addrBg, placeholderTxt, addrTxt, validTxt);
 
     // Submit / Skip buttons
-    const submitY = panelY + panelH - 116;
-    const skipY   = panelY + panelH - 58;
+    const submitY = panelY + panelH - 122;
+    const skipY   = panelY + panelH - 62;
     const submitBg  = this.add.graphics().setDepth(19);
     const submitTxt = this.add.text(cx, submitY + 14, 'SUBMIT ADDRESS', {
       fontSize:'22px', fill:'#444444', fontFamily:'monospace',
     }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
     const skipTxt = this.add.text(cx, skipY + 12, 'SKIP — JUST POST SCORE', {
-      fontSize:'16px', fill:'#888888', fontFamily:'monospace',
+      fontSize:'17px', fill:'#888888', fontFamily:'monospace',
     }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
     els.push(submitBg, submitTxt, skipTxt);
 
     const isValid = () => address.length >= 32 && address.length <= 44;
 
     const redraw = () => {
-      // Box
       addrBg.clear();
-      addrBg.fillStyle(0x111111, 0.7);
+      addrBg.fillStyle(0x111111, 0.8);
       addrBg.fillRoundedRect(panelX + 16, boxY, panelW - 32, boxH, 8);
-      addrBg.lineStyle(2, isValid() ? SOL : 0x333333, 1);
+      addrBg.lineStyle(2, isValid() ? SOL : (address.length > 0 ? 0x555555 : 0x222222), 1);
       addrBg.strokeRoundedRect(panelX + 16, boxY, panelW - 32, boxH, 8);
 
-      // Address text with blinking cursor
+      // Show placeholder or real address
+      placeholderTxt.setVisible(address.length === 0);
       const display = address + (showCursor ? '|' : ' ');
-      addrTxt.setText(display.length > 1 ? display : (showCursor ? '|' : ' '));
+      addrTxt.setText(address.length > 0 ? display : '');
 
-      // Validity hint
       if (address.length === 0) {
-        validTxt.setText('paste or type your wallet address');
-        validTxt.setStyle({ fill: '#555555' });
+        validTxt.setText('');
       } else if (address.length < 32) {
-        validTxt.setText(`${address.length}/44 — too short`);
+        validTxt.setText(`${address.length} chars — need at least 32`);
         validTxt.setStyle({ fill: '#FF6644' });
       } else {
-        validTxt.setText(`${address.length} chars  ✓  valid length`);
+        validTxt.setText(`${address.length} chars  ✓  looks good`);
         validTxt.setStyle({ fill: '#00FF88' });
       }
 
-      // Submit button style
       submitBg.clear();
       if (isValid()) {
         submitBg.fillStyle(SOL, 0.15);
@@ -1140,7 +1155,7 @@ class GameScene extends Phaser.Scene {
         submitBg.strokeRoundedRect(cx - 120, submitY - 4, 240, 46, 10);
         submitTxt.setStyle({ fill: '#9945FF' });
       } else {
-        submitBg.fillStyle(0x222222, 0.5);
+        submitBg.fillStyle(0x1a1a1a, 0.8);
         submitBg.fillRoundedRect(cx - 120, submitY - 4, 240, 46, 10);
         submitBg.lineStyle(2, 0x333333, 0.5);
         submitBg.strokeRoundedRect(cx - 120, submitY - 4, 240, 46, 10);
@@ -1149,7 +1164,7 @@ class GameScene extends Phaser.Scene {
     };
 
     this._lbCursorTimer = this.time.addEvent({
-      delay: 500, loop: true,
+      delay: 530, loop: true,
       callback: () => { showCursor = !showCursor; redraw(); },
     });
 
@@ -1165,13 +1180,25 @@ class GameScene extends Phaser.Scene {
     submitTxt.on('pointerdown', () => { if (isValid()) doSave(address); });
     skipTxt.on('pointerdown',   () => doSave(null));
 
+    // ── Paste handler (Ctrl+V / Cmd+V) ──
+    this._lbPasteHandler = (evt) => {
+      const text = (evt.clipboardData || window.clipboardData).getData('text');
+      if (text) {
+        address = text.trim().slice(0, 44);
+        redraw();
+      }
+      evt.preventDefault();
+    };
+    document.addEventListener('paste', this._lbPasteHandler);
+
+    // ── Keyboard handler (manual typing + backspace) ──
     this._lbKeyHandler = (evt) => {
       if (evt.key === 'Backspace') {
         address = address.slice(0, -1);
         redraw();
       } else if (evt.key === 'Enter') {
         if (isValid()) doSave(address);
-        else if (address.length === 0) doSave(null); // empty = skip
+        else if (address.length === 0) doSave(null);
       } else if (evt.key === 'Escape') {
         doSave(null);
       } else if (evt.key.length === 1 && address.length < 44) {
@@ -1282,15 +1309,37 @@ class GameScene extends Phaser.Scene {
             align:'right',
           }).setOrigin(1, 0).setDepth(20));
 
-          // Solana address (truncated: first6...last6)
+          // Solana address (truncated) + COPY button
           if (entry.solana_address) {
-            const addr = entry.solana_address;
+            const addr  = entry.solana_address;
             const short = addr.length > 12
               ? addr.slice(0, 5) + '...' + addr.slice(-5)
               : addr;
+
             els.push(this.add.text(panelX + 14, rowY + 50, '◎ ' + short, {
               fontSize:'11px', fill:'#9945FF', fontFamily:'monospace',
             }).setOrigin(0, 0).setDepth(20));
+
+            // COPY button — copies full address to clipboard
+            const copyBtn = this.add.text(panelX + panelW - 14, rowY + 50, '[ COPY ]', {
+              fontSize:'11px', fill:'#9945FF', fontFamily:'monospace',
+            }).setOrigin(1, 0).setDepth(20).setInteractive({ useHandCursor: true });
+            copyBtn.on('pointerdown', () => {
+              navigator.clipboard.writeText(addr).then(() => {
+                copyBtn.setText('[ COPIED! ]');
+                copyBtn.setStyle({ fill: '#00FF88' });
+                this.time.delayedCall(1800, () => {
+                  if (copyBtn.active) {
+                    copyBtn.setText('[ COPY ]');
+                    copyBtn.setStyle({ fill: '#9945FF' });
+                  }
+                });
+              }).catch(() => {
+                copyBtn.setText('[ FAILED ]');
+                copyBtn.setStyle({ fill: '#FF4444' });
+              });
+            });
+            els.push(copyBtn);
           }
         });
       })
