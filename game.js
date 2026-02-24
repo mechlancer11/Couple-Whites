@@ -854,8 +854,12 @@ class GameScene extends Phaser.Scene {
   }
 
   async _saveLBEntry(initials, score, message, msgColor, solanaAddr = null) {
-    const payload = { initials, score, message, msg_color: msgColor, solana_address: solanaAddr };
+    // Only include solana_address in payload if it has a value
+    // (avoids errors if the DB column hasn't been added yet)
+    const payload = { initials, score, message, msg_color: msgColor };
+    if (solanaAddr) payload.solana_address = solanaAddr;
     if (!this._supabaseReady()) {
+      if (solanaAddr) payload.solana_address = solanaAddr;
       const id = this._localSave(payload);
       return id;
     }
