@@ -146,6 +146,7 @@ class GameScene extends Phaser.Scene {
     this._lbKeyHandler     = null; // keyboard handler for initials entry
     this._lbCursorTimer    = null; // blinking cursor timer for solana entry
     this._lbPasteHandler   = null; // document paste handler for solana entry
+    this._lbHiddenInput    = document.getElementById('lb-input'); // mobile keyboard trigger
 
     this._buildBackground();
     this._buildPlayer();
@@ -792,24 +793,30 @@ class GameScene extends Phaser.Scene {
       els.push(nb);
     }
 
-    // TAP TO RESTART (interactive)
-    const restartTxt = this.add.text(cx, panelY + panelH - 104, 'TAP TO RESTART', {
-      fontSize:'24px', fill:'#FFFFFF', fontFamily:'monospace',
-    }).setOrigin(0.5, 0).setDepth(20).setInteractive({ useHandCursor: true });
+    // TAP TO RESTART — large touch target
+    const restartY   = panelY + panelH - 118;
+    const restartBg  = this.add.graphics().setDepth(19);
+    restartBg.fillStyle(0xFFFFFF, 0.07);
+    restartBg.fillRoundedRect(cx - 130, restartY - 8, 260, 54, 14);
+    restartBg.lineStyle(2, 0xFFFFFF, 0.35);
+    restartBg.strokeRoundedRect(cx - 130, restartY - 8, 260, 54, 14);
+    const restartTxt = this.add.text(cx, restartY + 18, 'TAP TO RESTART', {
+      fontSize:'28px', fill:'#FFFFFF', fontFamily:'monospace',
+    }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
     restartTxt.on('pointerdown', () => { this._clearGoElements(); this.scene.restart(); });
-    els.push(restartTxt);
+    els.push(restartBg, restartTxt);
 
-    // LEADERBOARD button
-    const lbY = panelY + panelH - 58;
+    // LEADERBOARD button — large touch target
+    const lbY  = panelY + panelH - 54;
     const lbBg = this.add.graphics().setDepth(19);
-    lbBg.fillStyle(0x00FFFF, 0.10);
-    lbBg.fillRoundedRect(cx - 115, lbY - 6, 230, 44, 10);
-    lbBg.lineStyle(2, 0x00FFFF, 0.85);
-    lbBg.strokeRoundedRect(cx - 115, lbY - 6, 230, 44, 10);
+    lbBg.fillStyle(0x00FFFF, 0.12);
+    lbBg.fillRoundedRect(cx - 130, lbY - 8, 260, 54, 14);
+    lbBg.lineStyle(2.5, 0x00FFFF, 0.9);
+    lbBg.strokeRoundedRect(cx - 130, lbY - 8, 260, 54, 14);
     els.push(lbBg);
 
-    const lbBtn = this.add.text(cx, lbY + 16, '▶  LEADERBOARD', {
-      fontSize:'22px', fill:'#00FFFF', fontFamily:'monospace', shadow:glow('#00FFFF'),
+    const lbBtn = this.add.text(cx, lbY + 18, '▶  LEADERBOARD', {
+      fontSize:'26px', fill:'#00FFFF', fontFamily:'monospace', shadow:glow('#00FFFF'),
     }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
     lbBtn.on('pointerdown', () => this._showInitialsEntry(deathMsg, msgColor));
     els.push(lbBtn);
@@ -897,6 +904,13 @@ class GameScene extends Phaser.Scene {
       document.removeEventListener('paste', this._lbPasteHandler);
       this._lbPasteHandler = null;
     }
+    // Dismiss mobile keyboard and reset hidden input
+    if (this._lbHiddenInput) {
+      this._lbHiddenInput.removeEventListener('input', this._lbHiddenInput._handler);
+      this._lbHiddenInput._handler = null;
+      this._lbHiddenInput.value = '';
+      this._lbHiddenInput.blur();
+    }
     this.input.keyboard.removeAllListeners('keydown-SPACE');
   }
 
@@ -907,84 +921,95 @@ class GameScene extends Phaser.Scene {
     const els = this._goElements;
     const glow = c => ({ offsetX:0, offsetY:0, color:c, blur:12, fill:true });
     const cx = GAME_WIDTH / 2;
-    const panelW = 380, panelH = 370;
+    const panelW = 420, panelH = 420;
     const panelX = (GAME_WIDTH - panelW) / 2;
     const panelY = GAME_HEIGHT / 2 - panelH / 2;
 
     const g = this.add.graphics().setDepth(18);
-    g.fillStyle(0x000000, 0.90);
-    g.fillRoundedRect(panelX, panelY, panelW, panelH, 20);
-    g.lineStyle(2, 0x00FFFF, 0.9);
-    g.strokeRoundedRect(panelX, panelY, panelW, panelH, 20);
+    g.fillStyle(0x000000, 0.92);
+    g.fillRoundedRect(panelX, panelY, panelW, panelH, 22);
+    g.lineStyle(2.5, 0x00FFFF, 0.9);
+    g.strokeRoundedRect(panelX, panelY, panelW, panelH, 22);
     els.push(g);
 
-    els.push(this.add.text(cx, panelY + 24, 'ENTER INITIALS', {
-      fontSize:'34px', fill:'#00FFFF', fontFamily:'monospace',
+    els.push(this.add.text(cx, panelY + 28, 'ENTER INITIALS', {
+      fontSize:'36px', fill:'#00FFFF', fontFamily:'monospace',
       stroke:'#001133', strokeThickness:4, shadow:glow('#00FFFF'),
     }).setOrigin(0.5, 0).setDepth(20));
 
-    els.push(this.add.text(cx, panelY + 74, deathMsg, {
-      fontSize:'13px', fill:msgColor, fontFamily:'monospace',
-      align:'center', wordWrap:{ width: panelW - 32 },
+    els.push(this.add.text(cx, panelY + 80, deathMsg, {
+      fontSize:'14px', fill:msgColor, fontFamily:'monospace',
+      align:'center', wordWrap:{ width: panelW - 40 },
       shadow:{offsetX:0,offsetY:0,color:msgColor,blur:6,fill:true},
     }).setOrigin(0.5, 0).setDepth(20));
 
-    // Three letter slots
+    // Tap-to-type hint
+    const tapHint = this.add.text(cx, panelY + 118, 'TAP A LETTER BOX TO TYPE', {
+      fontSize:'13px', fill:'#00FFFF', fontFamily:'monospace',
+    }).setOrigin(0.5, 0).setDepth(20);
+    els.push(tapHint);
+
+    // Three letter slots — wider spacing
     const letters  = ['_', '_', '_'];
     let cursor = 0;
-    const slotY  = panelY + 148;
-    const slotXs = [cx - 80, cx, cx + 80];
+    const slotY  = panelY + 158;
+    const slotXs = [cx - 100, cx, cx + 100];
+    const slotW  = 72, slotH = 84;
 
-    // Slot box graphics
-    const slotBoxes = slotXs.map(sx => {
-      const b = this.add.graphics().setDepth(19);
-      els.push(b);
-      return b;
-    });
-
-    // Slot letter texts
+    const slotBoxes = slotXs.map(() => { const b = this.add.graphics().setDepth(19); els.push(b); return b; });
     const slotTexts = slotXs.map(sx => {
-      const t = this.add.text(sx, slotY, '_', {
-        fontSize:'60px', fill:'#444444', fontFamily:'monospace',
+      const t = this.add.text(sx, slotY + 10, '_', {
+        fontSize:'64px', fill:'#444444', fontFamily:'monospace',
       }).setOrigin(0.5, 0).setDepth(20);
       els.push(t);
       return t;
     });
 
-    // Up / Down arrows for mobile tapping
+    // Tap slot → focus hidden input for that slot
     slotXs.forEach((sx, i) => {
-      const upArrow = this.add.text(sx, slotY - 32, '▲', {
-        fontSize:'22px', fill:'#666666', fontFamily:'monospace',
-      }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
-      upArrow.on('pointerdown', () => {
+      const hitZone = this.add.rectangle(sx, slotY + slotH / 2, slotW + 20, slotH + 20, 0x000000, 0)
+        .setDepth(21).setInteractive({ useHandCursor: true });
+      hitZone.on('pointerdown', () => {
         cursor = i;
-        const cur = letters[cursor];
-        letters[cursor] = cur === '_' ? 'A' : (cur === 'Z' ? 'A' : String.fromCharCode(cur.charCodeAt(0) + 1));
         refresh();
+        if (this._lbHiddenInput) {
+          this._lbHiddenInput.maxLength = 1;
+          this._lbHiddenInput.autocapitalize = 'characters';
+          this._lbHiddenInput.value = '';
+          this._lbHiddenInput.focus();
+        }
       });
-      els.push(upArrow);
-
-      const downArrow = this.add.text(sx, slotY + 76, '▼', {
-        fontSize:'22px', fill:'#666666', fontFamily:'monospace',
-      }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
-      downArrow.on('pointerdown', () => {
-        cursor = i;
-        const cur = letters[cursor];
-        letters[cursor] = cur === '_' ? 'Z' : (cur === 'A' ? 'Z' : String.fromCharCode(cur.charCodeAt(0) - 1));
-        refresh();
-      });
-      els.push(downArrow);
+      els.push(hitZone);
     });
 
-    els.push(this.add.text(cx, slotY + 102, 'TYPE   OR   TAP ARROWS', {
-      fontSize:'13px', fill:'#555555', fontFamily:'monospace',
-    }).setOrigin(0.5, 0).setDepth(20));
+    // Up / Down arrows
+    slotXs.forEach((sx, i) => {
+      const up = this.add.text(sx, slotY - 38, '▲', {
+        fontSize:'28px', fill:'#555555', fontFamily:'monospace',
+      }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
+      up.on('pointerdown', () => {
+        cursor = i;
+        const c = letters[i];
+        letters[i] = c === '_' ? 'A' : c === 'Z' ? 'A' : String.fromCharCode(c.charCodeAt(0) + 1);
+        refresh();
+      });
+      const dn = this.add.text(sx, slotY + slotH + 10, '▼', {
+        fontSize:'28px', fill:'#555555', fontFamily:'monospace',
+      }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
+      dn.on('pointerdown', () => {
+        cursor = i;
+        const c = letters[i];
+        letters[i] = c === '_' ? 'Z' : c === 'A' ? 'Z' : String.fromCharCode(c.charCodeAt(0) - 1);
+        refresh();
+      });
+      els.push(up, dn);
+    });
 
-    // Submit button (greyed until all 3 filled)
-    const submitBg = this.add.graphics().setDepth(19);
-    const submitY  = panelY + panelH - 62;
-    const submitTxt = this.add.text(cx, submitY + 14, 'SUBMIT', {
-      fontSize:'30px', fill:'#333333', fontFamily:'monospace',
+    // Submit button — large touch target
+    const submitBg  = this.add.graphics().setDepth(19);
+    const submitY   = panelY + panelH - 72;
+    const submitTxt = this.add.text(cx, submitY + 18, 'SUBMIT', {
+      fontSize:'34px', fill:'#333333', fontFamily:'monospace',
     }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
     submitTxt.on('pointerdown', () => doSubmit());
     els.push(submitBg, submitTxt);
@@ -992,40 +1017,54 @@ class GameScene extends Phaser.Scene {
     const refresh = () => {
       const allFilled = letters.every(l => l !== '_');
       slotTexts.forEach((t, i) => {
-        const active  = i === cursor;
-        const filled  = letters[i] !== '_';
         t.setText(letters[i]);
-        t.setStyle({ fill: active ? '#00FFFF' : (filled ? '#FFFFFF' : '#444444') });
+        t.setStyle({ fill: i === cursor ? '#00FFFF' : (letters[i] !== '_' ? '#FFFFFF' : '#444444') });
       });
       slotBoxes.forEach((b, i) => {
-        const active = i === cursor;
         b.clear();
-        b.lineStyle(2, active ? 0x00FFFF : 0x333333, 1);
-        b.strokeRect(slotXs[i] - 32, slotY - 6, 64, 72);
+        b.lineStyle(3, i === cursor ? 0x00FFFF : 0x333333, 1);
+        b.strokeRoundedRect(slotXs[i] - slotW / 2, slotY, slotW, slotH, 8);
       });
       submitBg.clear();
+      const sw = 220, sh = 58;
       if (allFilled) {
-        submitBg.fillStyle(0x00FFFF, 0.12);
-        submitBg.fillRoundedRect(cx - 100, submitY - 4, 200, 48, 10);
-        submitBg.lineStyle(2, 0x00FFFF, 0.9);
-        submitBg.strokeRoundedRect(cx - 100, submitY - 4, 200, 48, 10);
+        submitBg.fillStyle(0x00FFFF, 0.14);
+        submitBg.fillRoundedRect(cx - sw / 2, submitY - 4, sw, sh, 14);
+        submitBg.lineStyle(2.5, 0x00FFFF, 0.9);
+        submitBg.strokeRoundedRect(cx - sw / 2, submitY - 4, sw, sh, 14);
         submitTxt.setStyle({ fill: '#00FFFF' });
       } else {
-        submitBg.fillStyle(0x222222, 0.5);
-        submitBg.fillRoundedRect(cx - 100, submitY - 4, 200, 48, 10);
-        submitBg.lineStyle(2, 0x333333, 0.6);
-        submitBg.strokeRoundedRect(cx - 100, submitY - 4, 200, 48, 10);
+        submitBg.fillStyle(0x1a1a1a, 0.8);
+        submitBg.fillRoundedRect(cx - sw / 2, submitY - 4, sw, sh, 14);
+        submitBg.lineStyle(2, 0x333333, 0.5);
+        submitBg.strokeRoundedRect(cx - sw / 2, submitY - 4, sw, sh, 14);
         submitTxt.setStyle({ fill: '#333333' });
       }
     };
 
     const doSubmit = () => {
       if (!letters.every(l => l !== '_')) return;
-      const initials = letters.join('');
+      if (this._lbHiddenInput) this._lbHiddenInput.blur();
       this._clearGoElements();
-      this._showSolanaEntry(initials, deathMsg, msgColor);
+      this._showSolanaEntry(letters.join(''), deathMsg, msgColor);
     };
 
+    // Mobile: hidden input fires one character at a time
+    if (this._lbHiddenInput) {
+      const mobileHandler = () => {
+        const val = this._lbHiddenInput.value.toUpperCase().replace(/[^A-Z]/g, '');
+        if (val.length > 0) {
+          letters[cursor] = val[val.length - 1];
+          cursor = Math.min(cursor + 1, 2);
+          this._lbHiddenInput.value = '';
+          refresh();
+        }
+      };
+      this._lbHiddenInput._handler = mobileHandler;
+      this._lbHiddenInput.addEventListener('input', mobileHandler);
+    }
+
+    // Desktop keyboard
     this._lbKeyHandler = (evt) => {
       const key = evt.key.toUpperCase();
       if (key.length === 1 && key >= 'A' && key <= 'Z') {
@@ -1033,22 +1072,12 @@ class GameScene extends Phaser.Scene {
         cursor = Math.min(cursor + 1, 2);
         refresh();
       } else if (evt.key === 'Backspace') {
-        if (letters[cursor] !== '_') {
-          letters[cursor] = '_';
-        } else {
-          cursor = Math.max(cursor - 1, 0);
-          letters[cursor] = '_';
-        }
+        if (letters[cursor] !== '_') { letters[cursor] = '_'; }
+        else { cursor = Math.max(cursor - 1, 0); letters[cursor] = '_'; }
         refresh();
-      } else if (evt.key === 'Enter') {
-        doSubmit();
-      } else if (evt.key === 'ArrowLeft') {
-        cursor = Math.max(cursor - 1, 0);
-        refresh();
-      } else if (evt.key === 'ArrowRight') {
-        cursor = Math.min(cursor + 1, 2);
-        refresh();
-      }
+      } else if (evt.key === 'Enter') { doSubmit(); }
+      else if (evt.key === 'ArrowLeft')  { cursor = Math.max(cursor - 1, 0); refresh(); }
+      else if (evt.key === 'ArrowRight') { cursor = Math.min(cursor + 1, 2); refresh(); }
     };
     this.input.keyboard.on('keydown', this._lbKeyHandler);
 
@@ -1180,31 +1209,43 @@ class GameScene extends Phaser.Scene {
     submitTxt.on('pointerdown', () => { if (isValid()) doSave(address); });
     skipTxt.on('pointerdown',   () => doSave(null));
 
-    // ── Paste handler (Ctrl+V / Cmd+V) ──
+    // Make the address box tappable to summon mobile keyboard
+    const boxHitZone = this.add.rectangle(cx, boxY + boxH / 2, panelW - 32, boxH, 0x000000, 0)
+      .setDepth(21).setInteractive({ useHandCursor: true });
+    boxHitZone.on('pointerdown', () => {
+      if (this._lbHiddenInput) {
+        this._lbHiddenInput.maxLength = 44;
+        this._lbHiddenInput.autocapitalize = 'none';
+        this._lbHiddenInput.value = address;
+        this._lbHiddenInput.focus();
+      }
+    });
+    els.push(boxHitZone);
+
+    // ── Mobile: hidden input fires on every keystroke / paste ──
+    if (this._lbHiddenInput) {
+      const mobileHandler = () => {
+        address = this._lbHiddenInput.value.trim().slice(0, 44);
+        redraw();
+      };
+      this._lbHiddenInput._handler = mobileHandler;
+      this._lbHiddenInput.addEventListener('input', mobileHandler);
+    }
+
+    // ── Desktop paste handler (Ctrl+V / Cmd+V) ──
     this._lbPasteHandler = (evt) => {
       const text = (evt.clipboardData || window.clipboardData).getData('text');
-      if (text) {
-        address = text.trim().slice(0, 44);
-        redraw();
-      }
+      if (text) { address = text.trim().slice(0, 44); redraw(); }
       evt.preventDefault();
     };
     document.addEventListener('paste', this._lbPasteHandler);
 
-    // ── Keyboard handler (manual typing + backspace) ──
+    // ── Desktop keyboard handler ──
     this._lbKeyHandler = (evt) => {
-      if (evt.key === 'Backspace') {
-        address = address.slice(0, -1);
-        redraw();
-      } else if (evt.key === 'Enter') {
-        if (isValid()) doSave(address);
-        else if (address.length === 0) doSave(null);
-      } else if (evt.key === 'Escape') {
-        doSave(null);
-      } else if (evt.key.length === 1 && address.length < 44) {
-        address += evt.key;
-        redraw();
-      }
+      if (evt.key === 'Backspace') { address = address.slice(0, -1); redraw(); }
+      else if (evt.key === 'Enter') { if (isValid()) doSave(address); else if (!address.length) doSave(null); }
+      else if (evt.key === 'Escape') { doSave(null); }
+      else if (evt.key.length === 1 && address.length < 44) { address += evt.key; redraw(); }
     };
     this.input.keyboard.on('keydown', this._lbKeyHandler);
 
@@ -1245,15 +1286,20 @@ class GameScene extends Phaser.Scene {
     }).setOrigin(0.5, 0).setDepth(20);
     els.push(loadingTxt);
 
-    // PLAY AGAIN button always visible at bottom
-    const btnY   = panelY + panelH - 48;
-    const playBtn = this.add.text(cx, btnY, 'PLAY AGAIN', {
-      fontSize:'28px', fill:'#FF00FF', fontFamily:'monospace',
+    // PLAY AGAIN button — large touch target
+    const btnY    = panelY + panelH - 62;
+    const playBg  = this.add.graphics().setDepth(19);
+    playBg.fillStyle(0xFF00FF, 0.12);
+    playBg.fillRoundedRect(cx - 130, btnY - 8, 260, 58, 14);
+    playBg.lineStyle(2.5, 0xFF00FF, 0.85);
+    playBg.strokeRoundedRect(cx - 130, btnY - 8, 260, 58, 14);
+    const playBtn = this.add.text(cx, btnY + 20, 'PLAY AGAIN', {
+      fontSize:'32px', fill:'#FF00FF', fontFamily:'monospace',
       stroke:'#330033', strokeThickness:3, shadow:glow('#FF00FF'),
     }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
     playBtn.on('pointerdown', () => { this._clearGoElements(); this.scene.restart(); });
-    this.tweens.add({ targets:playBtn, alpha:{ from:1, to:0.45 }, duration:600, yoyo:true, repeat:-1 });
-    els.push(playBtn);
+    this.tweens.add({ targets:[playBtn, playBg], alpha:{ from:1, to:0.5 }, duration:650, yoyo:true, repeat:-1 });
+    els.push(playBg, playBtn);
     this.input.keyboard.once('keydown-SPACE', () => { this._clearGoElements(); this.scene.restart(); });
 
     // Fetch and render rows
