@@ -868,31 +868,33 @@ class GameScene extends Phaser.Scene {
   }
 
   async _saveLBEntry(initials, score, message, msgColor, solanaAddr = null) {
-    // Only include solana_address in payload if it has a value
-    // (avoids errors if the DB column hasn't been added yet)
     const payload = { initials, score, message, msg_color: msgColor };
     if (solanaAddr) payload.solana_address = solanaAddr;
-    if (!this._supabaseReady()) {
-      if (solanaAddr) payload.solana_address = solanaAddr;
-      const id = this._localSave(payload);
-      return id;
+
+    // Always save locally first — this guarantees the flow never errors out
+    const localId = this._localSave({ ...payload });
+
+    // Try Supabase in the background — failure is silently ignored
+    if (this._supabaseReady()) {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/${LB_TABLE}`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation',
+          },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const rows = await res.json();
+          return rows[0]?.id ?? localId;
+        }
+      } catch { /* Supabase unavailable — local save is already done */ }
     }
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/${LB_TABLE}`,
-      {
-        method: 'POST',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation',
-        },
-        body: JSON.stringify(payload),
-      }
-    );
-    if (!res.ok) throw new Error(`LB save failed: ${res.status}`);
-    const rows = await res.json();
-    return rows[0]?.id ?? null;
+
+    return localId;
   }
 
   _clearGoElements() {
@@ -1214,24 +1216,10 @@ class GameScene extends Phaser.Scene {
       submitTxt.setText('SAVING...');
       submitTxt.setStyle({ fill: '#AAAAAA' });
       submitBg.clear();
+      // _saveLBEntry always succeeds (saves locally first, tries Supabase in background)
       this._saveLBEntry(initials, this.score, deathMsg, msgColor, addr || null)
         .then(savedId => { this._clearGoElements(); this._showLeaderboard(savedId); })
-        .catch(() => {
-          if (!addr) {
-            // Skip — proceed to leaderboard even if save fails
-            this._clearGoElements();
-            this._showLeaderboard(null);
-          } else {
-            // Submit with address failed (solana_address column may not exist in DB yet).
-            // Retry without the address so the score still gets posted.
-            this._saveLBEntry(initials, this.score, deathMsg, msgColor, null)
-              .then(savedId => { this._clearGoElements(); this._showLeaderboard(savedId); })
-              .catch(() => {
-                submitTxt.setText('ERROR — RETRY');
-                submitTxt.setStyle({ fill: '#FF4444' });
-              });
-          }
-        });
+        .catch(() => { this._clearGoElements(); this._showLeaderboard(null); });
     };
 
     submitTxt.on('pointerdown', () => { if (isValid()) doSave(address); });
