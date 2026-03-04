@@ -1092,7 +1092,7 @@ class GameScene extends Phaser.Scene {
     const glow = c => ({ offsetX:0, offsetY:0, color:c, blur:12, fill:true });
     const cx   = GAME_WIDTH / 2;
     const SOL  = 0x9945FF;
-    const panelW = 420, panelH = 360;
+    const panelW = 420, panelH = 410;
     const panelX = (GAME_WIDTH - panelW) / 2;
     const panelY = GAME_HEIGHT / 2 - panelH / 2;
 
@@ -1113,9 +1113,8 @@ class GameScene extends Phaser.Scene {
     }).setOrigin(0.5, 0).setDepth(20));
 
     // Paste hint banner
-    els.push(this.add.text(cx, panelY + 86, 'CTRL+V  /  CMD+V  TO PASTE', {
-      fontSize:'13px', fill:'#9945FF', fontFamily:'monospace',
-      shadow:glow('#9945FF'),
+    els.push(this.add.text(cx, panelY + 86, 'CTRL+V / CMD+V  or  TAP  ▼  PASTE  ▼  BUTTON', {
+      fontSize:'11px', fill:'#9945FF', fontFamily:'monospace',
     }).setOrigin(0.5, 0).setDepth(20));
 
     // Address text box
@@ -1140,15 +1139,27 @@ class GameScene extends Phaser.Scene {
     }).setOrigin(0.5, 0).setDepth(20);
     els.push(addrBg, placeholderTxt, addrTxt, validTxt);
 
+    // PASTE button (mobile-primary)
+    const pasteY   = panelY + panelH - 170;
+    const pasteBg  = this.add.graphics().setDepth(19);
+    const pasteTxt = this.add.text(cx, pasteY + 13, '📋  PASTE ADDRESS', {
+      fontSize:'20px', fill:'#FFFFFF', fontFamily:'monospace',
+    }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
+    pasteBg.fillStyle(0x9945FF, 0.2);
+    pasteBg.fillRoundedRect(cx - 130, pasteY - 2, 260, 46, 10);
+    pasteBg.lineStyle(2, 0x9945FF, 0.9);
+    pasteBg.strokeRoundedRect(cx - 130, pasteY - 2, 260, 46, 10);
+    els.push(pasteBg, pasteTxt);
+
     // Submit / Skip buttons
-    const submitY = panelY + panelH - 122;
-    const skipY   = panelY + panelH - 62;
+    const submitY = panelY + panelH - 110;
+    const skipY   = panelY + panelH - 56;
     const submitBg  = this.add.graphics().setDepth(19);
     const submitTxt = this.add.text(cx, submitY + 14, 'SUBMIT ADDRESS', {
-      fontSize:'22px', fill:'#444444', fontFamily:'monospace',
+      fontSize:'20px', fill:'#444444', fontFamily:'monospace',
     }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
     const skipTxt = this.add.text(cx, skipY + 12, 'SKIP — JUST POST SCORE', {
-      fontSize:'17px', fill:'#888888', fontFamily:'monospace',
+      fontSize:'15px', fill:'#888888', fontFamily:'monospace',
     }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
     els.push(submitBg, submitTxt, skipTxt);
 
@@ -1209,13 +1220,36 @@ class GameScene extends Phaser.Scene {
     submitTxt.on('pointerdown', () => { if (isValid()) doSave(address); });
     skipTxt.on('pointerdown',   () => doSave(null));
 
+    // ── PASTE button — uses Clipboard API (works on iOS/Android) ──
+    pasteTxt.on('pointerdown', () => {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText()
+          .then(text => { if (text) { address = text.trim().slice(0, 44); redraw(); } })
+          .catch(() => {
+            // Clipboard API denied — fall back to focusing hidden input so user can long-press paste
+            if (this._lbHiddenInput) {
+              this._lbHiddenInput.maxLength = 44;
+              this._lbHiddenInput.setAttribute('autocapitalize', 'none');
+              this._lbHiddenInput.value = address;
+              this._lbHiddenInput.focus();
+            }
+          });
+      } else if (this._lbHiddenInput) {
+        // No clipboard API — focus input and let user long-press paste
+        this._lbHiddenInput.maxLength = 44;
+        this._lbHiddenInput.setAttribute('autocapitalize', 'none');
+        this._lbHiddenInput.value = address;
+        this._lbHiddenInput.focus();
+      }
+    });
+
     // Make the address box tappable to summon mobile keyboard
     const boxHitZone = this.add.rectangle(cx, boxY + boxH / 2, panelW - 32, boxH, 0x000000, 0)
       .setDepth(21).setInteractive({ useHandCursor: true });
     boxHitZone.on('pointerdown', () => {
       if (this._lbHiddenInput) {
         this._lbHiddenInput.maxLength = 44;
-        this._lbHiddenInput.autocapitalize = 'none';
+        this._lbHiddenInput.setAttribute('autocapitalize', 'none');
         this._lbHiddenInput.value = address;
         this._lbHiddenInput.focus();
       }
@@ -1225,11 +1259,17 @@ class GameScene extends Phaser.Scene {
     // ── Mobile: hidden input fires on every keystroke / paste ──
     if (this._lbHiddenInput) {
       const mobileHandler = () => {
-        address = this._lbHiddenInput.value.trim().slice(0, 44);
-        redraw();
+        const val = this._lbHiddenInput.value.trim().slice(0, 44);
+        if (val !== address) { address = val; redraw(); }
       };
       this._lbHiddenInput._handler = mobileHandler;
       this._lbHiddenInput.addEventListener('input', mobileHandler);
+
+      // Auto-focus immediately (we arrived here via a tap, so iOS allows it)
+      this._lbHiddenInput.maxLength = 44;
+      this._lbHiddenInput.setAttribute('autocapitalize', 'none');
+      this._lbHiddenInput.value = '';
+      this._lbHiddenInput.focus();
     }
 
     // ── Desktop paste handler (Ctrl+V / Cmd+V) ──
