@@ -1099,7 +1099,7 @@ class GameScene extends Phaser.Scene {
     const glow = c => ({ offsetX:0, offsetY:0, color:c, blur:12, fill:true });
     const cx   = GAME_WIDTH / 2;
     const SOL  = 0x9945FF;
-    const panelW = 420, panelH = 410;
+    const panelW = 420, panelH = 360;
     const panelX = (GAME_WIDTH - panelW) / 2;
     const panelY = GAME_HEIGHT / 2 - panelH / 2;
 
@@ -1120,7 +1120,7 @@ class GameScene extends Phaser.Scene {
     }).setOrigin(0.5, 0).setDepth(20));
 
     // Paste hint banner
-    els.push(this.add.text(cx, panelY + 86, 'TAP PASTE → THEN LONG-PRESS → PASTE', {
+    els.push(this.add.text(cx, panelY + 86, 'LONG-PRESS THE BOX BELOW TO PASTE', {
       fontSize:'11px', fill:'#9945FF', fontFamily:'monospace',
     }).setOrigin(0.5, 0).setDepth(20));
 
@@ -1145,18 +1145,6 @@ class GameScene extends Phaser.Scene {
       fontSize:'11px', fill:'#555555', fontFamily:'monospace',
     }).setOrigin(0.5, 0).setDepth(20);
     els.push(addrBg, placeholderTxt, addrTxt, validTxt);
-
-    // PASTE button (mobile-primary)
-    const pasteY   = panelY + panelH - 170;
-    const pasteBg  = this.add.graphics().setDepth(19);
-    const pasteTxt = this.add.text(cx, pasteY + 13, '📋  PASTE ADDRESS', {
-      fontSize:'20px', fill:'#FFFFFF', fontFamily:'monospace',
-    }).setOrigin(0.5).setDepth(20).setInteractive({ useHandCursor: true });
-    pasteBg.fillStyle(0x9945FF, 0.2);
-    pasteBg.fillRoundedRect(cx - 130, pasteY - 2, 260, 46, 10);
-    pasteBg.lineStyle(2, 0x9945FF, 0.9);
-    pasteBg.strokeRoundedRect(cx - 130, pasteY - 2, 260, 46, 10);
-    els.push(pasteBg, pasteTxt);
 
     // Submit / Skip buttons
     const submitY = panelY + panelH - 110;
@@ -1227,69 +1215,35 @@ class GameScene extends Phaser.Scene {
     submitTxt.on('pointerdown', () => { if (isValid()) doSave(address); });
     skipTxt.on('pointerdown',   () => doSave(null));
 
-    // ── PASTE button ──
-    pasteTxt.on('pointerdown', () => {
+    // ── Mobile: expand the hidden input to cover the address box ──
+    // iOS only shows the long-press "Paste" menu on a visible, interactive element.
+    // We position lb-input exactly over the address box with opacity:0.01 so iOS
+    // sees it as a real input while the Phaser graphics show underneath.
+    if (this._lbHiddenInput) {
       const inp = this._lbHiddenInput;
-      if (!inp) return;
+      const mobileHandler = () => {
+        const val = inp.value.trim().slice(0, 44);
+        if (val !== address) { address = val; redraw(); }
+      };
+      inp._handler = mobileHandler;
+      inp.addEventListener('input', mobileHandler);
 
-      // Resize + reposition the input over the address box.
-      // iOS only shows the long-press "Paste" menu on a real, visible, interactive element.
-      // opacity:0.01 (not 0) makes iOS treat it as visible; pointer-events:auto lets it receive touches.
       const cr = document.querySelector('canvas').getBoundingClientRect();
       const sx = cr.width  / GAME_WIDTH;
       const sy = cr.height / GAME_HEIGHT;
       inp.maxLength = 44;
       inp.setAttribute('autocapitalize', 'none');
       inp.setAttribute('inputmode', 'text');
-      inp.value = address;
+      inp.value = '';
       inp.style.left          = (cr.left + (panelX + 16) * sx) + 'px';
       inp.style.top           = (cr.top  + boxY          * sy) + 'px';
       inp.style.width         = ((panelW - 32) * sx) + 'px';
       inp.style.height        = (boxH          * sy) + 'px';
-      inp.style.opacity       = '0.01';   // >0 so iOS shows paste menu on long-press
-      inp.style.pointerEvents = 'auto';
+      inp.style.opacity       = '0.01'; // >0 so iOS treats it as visible
+      inp.style.pointerEvents = 'auto'; // receives taps + long-press
       inp.style.transform     = 'none';
       inp.style.caretColor    = 'white';
       inp.focus();
-      inp.select(); // select-all so paste replaces existing text
-
-      // Also attempt clipboard API (only works on HTTPS — desktop/modern Android)
-      if (navigator.clipboard && navigator.clipboard.readText) {
-        navigator.clipboard.readText()
-          .then(text => {
-            if (text) { address = text.trim().slice(0, 44); inp.value = address; redraw(); }
-          })
-          .catch(() => {}); // input already visible + focused — user can long-press paste
-      }
-    });
-
-    // Make the address box tappable to summon mobile keyboard
-    const boxHitZone = this.add.rectangle(cx, boxY + boxH / 2, panelW - 32, boxH, 0x000000, 0)
-      .setDepth(21).setInteractive({ useHandCursor: true });
-    boxHitZone.on('pointerdown', () => {
-      if (this._lbHiddenInput) {
-        this._lbHiddenInput.maxLength = 44;
-        this._lbHiddenInput.setAttribute('autocapitalize', 'none');
-        this._lbHiddenInput.value = address;
-        this._lbHiddenInput.focus();
-      }
-    });
-    els.push(boxHitZone);
-
-    // ── Mobile: hidden input fires on every keystroke / paste ──
-    if (this._lbHiddenInput) {
-      const mobileHandler = () => {
-        const val = this._lbHiddenInput.value.trim().slice(0, 44);
-        if (val !== address) { address = val; redraw(); }
-      };
-      this._lbHiddenInput._handler = mobileHandler;
-      this._lbHiddenInput.addEventListener('input', mobileHandler);
-
-      // Auto-focus immediately (we arrived here via a tap, so iOS allows it)
-      this._lbHiddenInput.maxLength = 44;
-      this._lbHiddenInput.setAttribute('autocapitalize', 'none');
-      this._lbHiddenInput.value = '';
-      this._lbHiddenInput.focus();
     }
 
     // ── Desktop paste handler (Ctrl+V / Cmd+V) ──
