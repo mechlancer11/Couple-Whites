@@ -916,7 +916,8 @@ class GameScene extends Phaser.Scene {
       s.width = '1px'; s.height = '1px';
       s.opacity = '0'; s.pointerEvents = 'none';
       s.transform = 'translate(-50%, -50%)';
-      s.caretColor = 'transparent';
+      s.color = 'transparent'; s.caretColor = 'transparent';
+      s.webkitUserSelect = '';
     }
     this.input.keyboard.removeAllListeners('keydown-SPACE');
   }
@@ -1209,7 +1210,16 @@ class GameScene extends Phaser.Scene {
       submitBg.clear();
       this._saveLBEntry(initials, this.score, deathMsg, msgColor, addr || null)
         .then(savedId => { this._clearGoElements(); this._showLeaderboard(savedId); })
-        .catch(() => { submitTxt.setText('ERROR — RETRY'); submitTxt.setStyle({ fill: '#FF4444' }); });
+        .catch(() => {
+          if (!addr) {
+            // Skip path — don't block user if save fails, just show leaderboard
+            this._clearGoElements();
+            this._showLeaderboard(null);
+          } else {
+            submitTxt.setText('ERROR — RETRY');
+            submitTxt.setStyle({ fill: '#FF4444' });
+          }
+        });
     };
 
     submitTxt.on('pointerdown', () => { if (isValid()) doSave(address); });
@@ -1235,14 +1245,19 @@ class GameScene extends Phaser.Scene {
       inp.setAttribute('autocapitalize', 'none');
       inp.setAttribute('inputmode', 'text');
       inp.value = '';
-      inp.style.left          = (cr.left + (panelX + 16) * sx) + 'px';
-      inp.style.top           = (cr.top  + boxY          * sy) + 'px';
-      inp.style.width         = ((panelW - 32) * sx) + 'px';
-      inp.style.height        = (boxH          * sy) + 'px';
-      inp.style.opacity       = '0.01'; // >0 so iOS treats it as visible
-      inp.style.pointerEvents = 'auto'; // receives taps + long-press
-      inp.style.transform     = 'none';
-      inp.style.caretColor    = 'white';
+      inp.style.left             = (cr.left + (panelX + 16) * sx) + 'px';
+      inp.style.top              = (cr.top  + boxY          * sy) + 'px';
+      inp.style.width            = ((panelW - 32) * sx) + 'px';
+      inp.style.height           = (boxH          * sy) + 'px';
+      // opacity MUST be 1 — iOS will not show the long-press Paste menu
+      // on elements with opacity < ~0.1. Use transparent color instead.
+      inp.style.opacity          = '1';
+      inp.style.color            = 'transparent';     // hide typed text (Phaser draws it)
+      inp.style.background       = 'transparent';
+      inp.style.caretColor       = 'rgba(255,255,255,0.5)'; // faint cursor for iOS to anchor menu
+      inp.style.webkitUserSelect = 'text';            // ensure iOS selection is allowed
+      inp.style.pointerEvents    = 'auto';            // receives taps + long-press
+      inp.style.transform        = 'none';
       inp.focus();
     }
 
