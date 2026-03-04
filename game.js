@@ -1212,12 +1212,18 @@ class GameScene extends Phaser.Scene {
         .then(savedId => { this._clearGoElements(); this._showLeaderboard(savedId); })
         .catch(() => {
           if (!addr) {
-            // Skip path — don't block user if save fails, just show leaderboard
+            // Skip — proceed to leaderboard even if save fails
             this._clearGoElements();
             this._showLeaderboard(null);
           } else {
-            submitTxt.setText('ERROR — RETRY');
-            submitTxt.setStyle({ fill: '#FF4444' });
+            // Submit with address failed (solana_address column may not exist in DB yet).
+            // Retry without the address so the score still gets posted.
+            this._saveLBEntry(initials, this.score, deathMsg, msgColor, null)
+              .then(savedId => { this._clearGoElements(); this._showLeaderboard(savedId); })
+              .catch(() => {
+                submitTxt.setText('ERROR — RETRY');
+                submitTxt.setStyle({ fill: '#FF4444' });
+              });
           }
         });
     };
