@@ -904,12 +904,19 @@ class GameScene extends Phaser.Scene {
       document.removeEventListener('paste', this._lbPasteHandler);
       this._lbPasteHandler = null;
     }
-    // Dismiss mobile keyboard and reset hidden input
+    // Dismiss mobile keyboard and reset hidden input to original hidden style
     if (this._lbHiddenInput) {
       this._lbHiddenInput.removeEventListener('input', this._lbHiddenInput._handler);
       this._lbHiddenInput._handler = null;
       this._lbHiddenInput.value = '';
       this._lbHiddenInput.blur();
+      // Restore the CSS the HTML page set on it
+      const s = this._lbHiddenInput.style;
+      s.left = '50%'; s.top = '50%';
+      s.width = '1px'; s.height = '1px';
+      s.opacity = '0'; s.pointerEvents = 'none';
+      s.transform = 'translate(-50%, -50%)';
+      s.caretColor = 'transparent';
     }
     this.input.keyboard.removeAllListeners('keydown-SPACE');
   }
@@ -1113,7 +1120,7 @@ class GameScene extends Phaser.Scene {
     }).setOrigin(0.5, 0).setDepth(20));
 
     // Paste hint banner
-    els.push(this.add.text(cx, panelY + 86, 'CTRL+V / CMD+V  or  TAP  ▼  PASTE  ▼  BUTTON', {
+    els.push(this.add.text(cx, panelY + 86, 'TAP PASTE → THEN LONG-PRESS → PASTE', {
       fontSize:'11px', fill:'#9945FF', fontFamily:'monospace',
     }).setOrigin(0.5, 0).setDepth(20));
 
@@ -1222,25 +1229,37 @@ class GameScene extends Phaser.Scene {
 
     // ── PASTE button ──
     pasteTxt.on('pointerdown', () => {
-      // focus() MUST be called synchronously here — iOS ignores focus() from async callbacks
-      if (this._lbHiddenInput) {
-        this._lbHiddenInput.maxLength = 44;
-        this._lbHiddenInput.setAttribute('autocapitalize', 'none');
-        this._lbHiddenInput.value = address;
-        this._lbHiddenInput.focus();
-      }
-      // Attempt clipboard API async — if it works, fill address directly;
-      // if denied, the input is already focused so user can long-press → Paste
+      const inp = this._lbHiddenInput;
+      if (!inp) return;
+
+      // Resize + reposition the input over the address box.
+      // iOS only shows the long-press "Paste" menu on a real, visible, interactive element.
+      // opacity:0.01 (not 0) makes iOS treat it as visible; pointer-events:auto lets it receive touches.
+      const cr = document.querySelector('canvas').getBoundingClientRect();
+      const sx = cr.width  / GAME_WIDTH;
+      const sy = cr.height / GAME_HEIGHT;
+      inp.maxLength = 44;
+      inp.setAttribute('autocapitalize', 'none');
+      inp.setAttribute('inputmode', 'text');
+      inp.value = address;
+      inp.style.left          = (cr.left + (panelX + 16) * sx) + 'px';
+      inp.style.top           = (cr.top  + boxY          * sy) + 'px';
+      inp.style.width         = ((panelW - 32) * sx) + 'px';
+      inp.style.height        = (boxH          * sy) + 'px';
+      inp.style.opacity       = '0.01';   // >0 so iOS shows paste menu on long-press
+      inp.style.pointerEvents = 'auto';
+      inp.style.transform     = 'none';
+      inp.style.caretColor    = 'white';
+      inp.focus();
+      inp.select(); // select-all so paste replaces existing text
+
+      // Also attempt clipboard API (only works on HTTPS — desktop/modern Android)
       if (navigator.clipboard && navigator.clipboard.readText) {
         navigator.clipboard.readText()
           .then(text => {
-            if (text) {
-              address = text.trim().slice(0, 44);
-              if (this._lbHiddenInput) this._lbHiddenInput.value = address;
-              redraw();
-            }
+            if (text) { address = text.trim().slice(0, 44); inp.value = address; redraw(); }
           })
-          .catch(() => {}); // input already focused above — user can long-press paste
+          .catch(() => {}); // input already visible + focused — user can long-press paste
       }
     });
 
