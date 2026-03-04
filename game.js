@@ -1220,26 +1220,27 @@ class GameScene extends Phaser.Scene {
     submitTxt.on('pointerdown', () => { if (isValid()) doSave(address); });
     skipTxt.on('pointerdown',   () => doSave(null));
 
-    // ── PASTE button — uses Clipboard API (works on iOS/Android) ──
+    // ── PASTE button ──
     pasteTxt.on('pointerdown', () => {
-      if (navigator.clipboard && navigator.clipboard.readText) {
-        navigator.clipboard.readText()
-          .then(text => { if (text) { address = text.trim().slice(0, 44); redraw(); } })
-          .catch(() => {
-            // Clipboard API denied — fall back to focusing hidden input so user can long-press paste
-            if (this._lbHiddenInput) {
-              this._lbHiddenInput.maxLength = 44;
-              this._lbHiddenInput.setAttribute('autocapitalize', 'none');
-              this._lbHiddenInput.value = address;
-              this._lbHiddenInput.focus();
-            }
-          });
-      } else if (this._lbHiddenInput) {
-        // No clipboard API — focus input and let user long-press paste
+      // focus() MUST be called synchronously here — iOS ignores focus() from async callbacks
+      if (this._lbHiddenInput) {
         this._lbHiddenInput.maxLength = 44;
         this._lbHiddenInput.setAttribute('autocapitalize', 'none');
         this._lbHiddenInput.value = address;
         this._lbHiddenInput.focus();
+      }
+      // Attempt clipboard API async — if it works, fill address directly;
+      // if denied, the input is already focused so user can long-press → Paste
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText()
+          .then(text => {
+            if (text) {
+              address = text.trim().slice(0, 44);
+              if (this._lbHiddenInput) this._lbHiddenInput.value = address;
+              redraw();
+            }
+          })
+          .catch(() => {}); // input already focused above — user can long-press paste
       }
     });
 
