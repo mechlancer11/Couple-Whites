@@ -853,12 +853,18 @@ class GameScene extends Phaser.Scene {
 
   async _getLBData() {
     if (!this._supabaseReady()) return this._localGet();
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/${LB_TABLE}?select=*&order=score.desc&limit=${LB_MAX}`,
-      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
-    );
-    if (!res.ok) throw new Error(`LB fetch failed: ${res.status}`);
-    return res.json();
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/${LB_TABLE}?select=*&order=score.desc&limit=${LB_MAX}`,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+      );
+      if (!res.ok) throw new Error(`LB fetch failed: ${res.status}`);
+      return res.json();
+    } catch {
+      // Supabase unreachable (paused project, no network, missing SELECT policy)
+      // Fall back to locally stored scores so the leaderboard still works
+      return this._localGet();
+    }
   }
 
   async _saveLBEntry(initials, score, message, msgColor, solanaAddr = null) {
@@ -1426,8 +1432,8 @@ class GameScene extends Phaser.Scene {
       })
       .catch(() => {
         if (!loadingTxt.active) return;
-        loadingTxt.setText('FAILED TO LOAD\nCHECK CONNECTION');
-        loadingTxt.setStyle({ fill: '#FF4444', align: 'center' });
+        loadingTxt.setText('NO SCORES YET');
+        loadingTxt.setStyle({ fill: '#555555', align: 'center' });
       });
   }
 
